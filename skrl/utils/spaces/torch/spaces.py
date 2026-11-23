@@ -375,6 +375,23 @@ def compute_space_limits(
     return low, high
 
 
+def _sample_batch(space: spaces.Space, batch_size: int) -> Any:
+    """Sample a batch from a fundamental space and advance the space's random number generator.
+
+    Gymnasium's ``batch_space`` seeds the batched space with a copy of the space's generator.
+    The advanced state is copied back so that consecutive calls return different samples.
+
+    :param space: Fundamental Gymnasium space.
+    :param batch_size: Size of the sampled batch.
+
+    :return: Sample of the batched space.
+    """
+    batched_space = gymnasium.vector.utils.batch_space(space, batch_size)
+    sample = batched_space.sample()
+    space.np_random.bit_generator.state = batched_space.np_random.bit_generator.state
+    return sample
+
+
 def sample_space(
     space: spaces.Space | None,
     *,
@@ -400,7 +417,7 @@ def sample_space(
     # fundamental spaces
     # - Box
     if isinstance(space, spaces.Box):
-        sample = gymnasium.vector.utils.batch_space(space, batch_size).sample()
+        sample = _sample_batch(space, batch_size)
         if backend == "numpy":
             return np.array(sample).reshape(batch_size, *space.shape)
         elif backend == "native":
@@ -410,7 +427,7 @@ def sample_space(
     # - Discrete
     elif isinstance(space, spaces.Discrete):
         # shift values from [start, start + n) to [0, n), as tensorized spaces
-        sample = gymnasium.vector.utils.batch_space(space, batch_size).sample() - space.start
+        sample = _sample_batch(space, batch_size) - space.start
         if backend == "numpy":
             return np.array(sample).reshape(batch_size, -1)
         elif backend == "native":
@@ -420,7 +437,7 @@ def sample_space(
     # - MultiDiscrete
     elif isinstance(space, spaces.MultiDiscrete):
         # shift values from [start, start + nvec) to [0, nvec), as tensorized spaces
-        sample = gymnasium.vector.utils.batch_space(space, batch_size).sample() - space.start
+        sample = _sample_batch(space, batch_size) - space.start
         if backend == "numpy":
             return np.array(sample).reshape(batch_size, *space.nvec.shape)
         elif backend == "native":
